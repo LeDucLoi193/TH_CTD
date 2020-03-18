@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "reader.h"
 #include "charcode.h"
@@ -30,6 +31,7 @@ void skipBlank() {
 
 void skipComment() {
   // TODO
+  // dang o state 3
   int state = 0;
   while ((currentChar != EOF) && (state < 2)){
     switch (charCodes[currentChar]){
@@ -42,7 +44,7 @@ void skipComment() {
         else
           state = 0; // ki tu khac * 
         break;
-      default:
+      default: // other
         state = 0;
     }
     readChar();
@@ -57,17 +59,25 @@ Token* readIdentKeyword(void) {
   Token *token = makeToken(TK_NONE, lineNo, colNo);
   int length = -1;
 
-  while( (currentChar != EOF) && ((charCodes[currentChar] == CHAR_LETTER) || (charCodes[currentChar] == CHAR_LETTER))) {
+  while( (currentChar != EOF) && ((charCodes[currentChar] == CHAR_LETTER) || (charCodes[currentChar] == CHAR_DIGIT))) {
     if (length < MAX_IDENT_LEN) {
-      token->string[++length] = toupper((char)currentChar);
+      // token->string[++length] = toupper((char)currentChar);
+      token->string[++length] = (char)currentChar;
       readChar();
     } 
   }
   if (length > MAX_IDENT_LEN) {
-    error(ERM_IDENTTOOLONG, token->lineNo, token->colNo);
+    error(ERR_IDENTTOOLONG, token->lineNo, token->colNo);
   }
   token->string[++length] = '\0';
-  token->tokenType = checkKeyword(token->string);
+  
+  char stringTest[MAX_IDENT_LEN];
+  for (int i = 0; i < length; ++i) {
+    stringTest[i] = toupper(token->string[i]);
+  }
+  stringTest[length] = '\0';
+  
+  token->tokenType = checkKeyword(stringTest);
 
   return token;
 }
@@ -79,12 +89,19 @@ Token* readNumber(void) {
 
   while( (currentChar != EOF) && (charCodes[currentChar] == CHAR_DIGIT) ) {
     // Doc tat ca cac ki tu la number va luu vao xau string trong token
-    token->string[++length] = (char)currentChar;
-    readChar();
+    if (length < MAX_IDENT_LEN) {
+      token->string[++length] = (char)currentChar;
+      readChar();
+    }
   }
-  token->string[length++] = '\0'; 
-  token->value = atoi(token->string);
-
+  if (length > MAX_IDENT_LEN) {
+    error(ERR_IDENTTOOLONG, lineNo, colNo);
+  }
+  else {
+    token->string[++length] = '\0'; 
+    token->value = atoi(token->string);
+  }
+  
   return token;
 }
 
@@ -96,7 +113,7 @@ Token* readConstChar(void) {
   readChar();
   if (currentChar == EOF) {
     token->tokenType = TK_NONE;
-    error(ERM_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
+    error(ERR_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
     return token;
   }
   token->value = currentChar;
@@ -110,16 +127,39 @@ Token* readConstChar(void) {
   else {
     // OTHER
     token->tokenType = TK_NONE;
-    error(ERM_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
+    error(ERR_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
     return token;
   }
+  /** Check neu thay ' bang "
+   * Token *token = makeToken(TK_CHAR, lineNo, colNo);
+
+    readChar();
+    if (currentChar == EOF) {
+      token->tokenType = TK_NONE;
+      error(ERM_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
+      return token;
+    }
+    token->value = currentChar;
+
+    readChar();
+    if (charCodes[currentChar] == CHAR_DOUBLEQUOTE) {
+      readChar();
+      return token;
+    }
+    else {
+      token->tokenType = TK_NONE;
+      error(ERM_INVALIDCHARCONSTANT, token->lineNo, token->colNo);
+      return token;
+    }
+   * 
+   * */
 
   return token;
 }
 
 Token* getToken(void) {
   Token *token;
-  int ln, cn;
+  // int ln, cn;
 
   if (currentChar == EOF) 
     return makeToken(TK_EOF, lineNo, colNo);
@@ -227,10 +267,9 @@ Token* getToken(void) {
     default:
       return makeToken(SB_LPAR, lineNo, colNo);
     }
-
-    // ....
-    // TODO
-    // ....
+    // case EOF:
+    //   token = makeToken(TK_EOF, lineNo, colNo);
+    //   return token;
   default:
     token = makeToken(TK_NONE, lineNo, colNo);
     error(ERR_INVALIDSYMBOL, lineNo, colNo);
@@ -249,7 +288,7 @@ void printToken(Token *token) {
   switch (token->tokenType) {
   case TK_NONE: printf("TK_NONE\n"); break;
   case TK_IDENT: printf("TK_IDENT(%s)\n", token->string); break;
-  case TK_NUMBER: printf("TK_NUMBER(%s)\n", token->string); break;
+  case TK_NUMBER: printf("TK_NUMBER(%d)\n", token->value); break;
   case TK_CHAR: printf("TK_CHAR(\'%s\')\n", token->string); break;
   case TK_EOF: printf("TK_EOF\n"); break;
 
